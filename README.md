@@ -66,21 +66,46 @@ The notebook was developed in Google Colab.
 - PyTorch neural hedger with CVaR training loop
 - GRU adversarial generator with alternating min–max training
 
+## Results so far
+
+All P&L figures below are for a **short call** and exclude the premium received, so the mean is roughly minus the option price. "Hedging error" is the standard deviation of P&L.
+
+**1. Sanity check: frictionless GBM, normalized neural hedger vs. Black–Scholes**
+(S0 = K = 100, sigma = 0.2, T = 1 year, 50 rebalancing steps; trained on 20,000 paths, tested on 10,000 unseen paths)
+
+| | Mean P&L | Hedging error (std) | VaR 95% | CVaR 95% |
+|---|---|---|---|---|
+| Black–Scholes delta | -10.91 | 0.97 | 12.51 | 13.19 |
+| Normalized deep hedger | -10.90 | 1.46 | 13.39 | 13.87 |
+
+With normalized inputs (moneyness, time to expiry, BS delta, previous position) and a scaled CVaR loss, the neural hedger comes within about 5% of Black–Scholes on CVaR. On frictionless GBM, Black–Scholes is essentially optimal, so matching it is the expected outcome.
+
+**2. NIFTY-scale benchmark: 10,000 GBM paths, sigma = 0.6, 374 one-minute steps (prices in paise)**
+This uses the *earlier, unnormalized* hedger.
+
+| Strategy | Mean P&L | Hedging error (std) | CVaR 5% | Downside dev |
+|---|---|---|---|---|
+| Black–Scholes (no costs) | -21,069 | 727 | 22,759 | 521 |
+| Neural network (no costs) | -21,062 | 12,255 | 53,601 | 9,929 |
+| Black–Scholes (c = 0.005) | -106,048 | 30,097 | 162,139 | 21,540 |
+| Neural network (c = 0.005) | -28,922 | 12,255 | 61,461 | 9,929 |
+
+This hedger did **not** learn a useful policy: without costs its hedging error is about 17x that of Black–Scholes. Its std is identical with and without costs, meaning its position barely changes after the first step (saturated tanh layers from unnormalized inputs). It "wins" at c = 0.005 only because that cost rate (0.5% per unit traded) is so high that the constant-position strategy avoids it. This is a training-setup problem that the normalized model above addresses; re-running the NIFTY-scale benchmark with the normalized hedger is the next step.
+
 ## Status and known limitations
 
-This is a work in progress. Being explicit about where it stands:
-
-- **Neural hedger training is not yet stable.** Inputs are currently unnormalized (prices are in the millions), which saturates the tanh layers, and the CVaR is estimated from small batches. Normalizing inputs (S/S0, time to expiry) and larger batches is the next step. Until then, the neural hedger does not match Black–Scholes.
-- **The full benchmark table is pending.** The comparison of Black–Scholes vs. the neural hedger over 10,000 paths, across all three generators and rebalancing frequencies, has not been completed.
-- **Adversarial hedger.** The generator and the alternating training loop are implemented; longer training and a proper evaluation against the baselines are pending.
-- **Transaction cost scale.** Experiments so far used a very high cost rate; realistic values (about 1e-4) are planned.
-- The notebook still contains some legacy exploratory cells from earlier iterations.
+- **Done:** real-data analysis, three path generators, hedging engine with costs, CVaR metrics, normalized neural hedger validated against Black–Scholes on frictionless GBM, GRU adversarial generator with alternating training.
+- **Adversarial training is a short demonstration** (10 alternating epochs; the hedger is not given the BS-delta input in this loop). Losses are logged, but a full evaluation of the adversarially trained hedger against the baselines is pending.
+- **Rebalancing-interval experiments (50 / 100 / 250 steps)** currently train and log losses. A full evaluation table across step counts is pending.
+- **Neural hedger with transaction costs** has not yet been validated with the normalized model, and realistic cost rates (about 1e-4) still need to be tested.
+- **Stress paths** are implemented and visualized but not yet used to evaluate the hedgers.
+- The notebook still contains some exploratory cells from earlier iterations.
 
 ## Roadmap
 
-- [ ] Normalize inputs and scale P&L; verify the neural hedger matches Black–Scholes on frictionless GBM
-- [ ] Run the benchmark: {GBM, stress, adversarial} × {BS, NN, adversarial NN} × {50, 100, 250 steps} × {no costs, costs}
-- [ ] Report mean P&L, hedging error (std of P&L + premium), CVaR and downside deviation, with P&L histograms
+- [x] Normalize inputs and scale the loss; verify the hedger approaches Black–Scholes on frictionless GBM
+- [ ] Re-run the NIFTY-scale benchmark with the normalized hedger and a realistic cost rate
+- [ ] Evaluate {GBM, stress, adversarial} x {BS, NN, adversarial NN} x {50, 100, 250 steps}
 - [ ] Clean up the notebook into a linear, reproducible pipeline
 
 ## Reference
